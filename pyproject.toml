@@ -3,7 +3,7 @@ name = "k8s-graph"
 version = "0.1.0"
 description = "Protocol-based Python library for building NetworkX graphs from Kubernetes resources"
 authors = [
-    {name = "K8s Graph Contributors"}
+    {name = "Nir Adler"}
 ]
 readme = "README.md"
 license = "MIT"
