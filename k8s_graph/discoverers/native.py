@@ -560,7 +560,9 @@ class NativeResourceDiscoverer(BaseDiscoverer):
         service_account_name = template_spec.get("serviceAccountName") or template_spec.get(
             "serviceAccount"
         )
-        if service_account_name:
+        # Only top-level workloads (Deployment, StatefulSet, DaemonSet) should have SA edges
+        # ReplicaSets inherit SA from their template but don't "use" it directly
+        if service_account_name and source.kind != "ReplicaSet":
             target = ResourceIdentifier(
                 kind="ServiceAccount",
                 name=service_account_name,
