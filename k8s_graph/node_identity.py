@@ -152,6 +152,27 @@ class NodeIdentity:
             attrs["replicas"] = spec.get("replicas")
             attrs["ready_replicas"] = status.get("readyReplicas")
             attrs["available_replicas"] = status.get("availableReplicas")
+            attrs["updated_replicas"] = status.get("updatedReplicas")
+
+        elif resource.get("kind") == "ReplicaSet":
+            attrs["replicas"] = status.get("replicas")
+            attrs["ready_replicas"] = status.get("readyReplicas")
+            attrs["available_replicas"] = status.get("availableReplicas")
+
+        elif resource.get("kind") == "PersistentVolumeClaim":
+            attrs["pvc_status"] = status.get("phase")
+            attrs["storage_class"] = spec.get("storageClassName")
+            attrs["volume_name"] = spec.get("volumeName")
+
+        elif resource.get("kind") == "Job":
+            attrs["job_active"] = status.get("active", 0)
+            attrs["job_succeeded"] = status.get("succeeded", 0)
+            attrs["job_failed"] = status.get("failed", 0)
+            attrs["completions"] = spec.get("completions")
+
+        elif resource.get("kind") == "CronJob":
+            attrs["schedule"] = spec.get("schedule")
+            attrs["suspend"] = spec.get("suspend")
 
         return {k: v for k, v in attrs.items() if v is not None}
 

@@ -83,7 +83,7 @@ async def test_api_call_statistics():
         assert stats["total"] > 0
         assert stats["total"] == stats["get_resource"] + stats["list_resources"]
 
-        print(f"\nAPI Call Statistics:")
+        print("\nAPI Call Statistics:")
         print(f"  get_resource: {stats['get_resource']}")
         print(f"  list_resources: {stats['list_resources']}")
         print(f"  total: {stats['total']}")

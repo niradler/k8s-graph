@@ -41,6 +41,8 @@ class NativeResourceDiscoverer(BaseDiscoverer):
 
         if kind == "Service":
             relationships.extend(self._discover_service_relationships(resource))
+        elif kind == "Endpoints":
+            relationships.extend(self._discover_endpoints_relationships(resource))
         elif kind == "Pod":
             relationships.extend(self._discover_pod_relationships(resource))
         elif kind == "Ingress":
@@ -110,6 +112,7 @@ class NativeResourceDiscoverer(BaseDiscoverer):
         if not selector:
             return relationships
 
+        # Service -> Pods via label selector
         target = ResourceIdentifier(
             kind="Pod",
             name=f"*[{self._parse_label_selector(selector)}]",
@@ -124,6 +127,58 @@ class NativeResourceDiscoverer(BaseDiscoverer):
                 details=f"Selects pods with labels: {self._parse_label_selector(selector)}",
             )
         )
+
+        # Service -> Endpoints (automatically created with same name)
+        endpoints_target = ResourceIdentifier(
+            kind="Endpoints",
+            name=source.name,
+            namespace=source.namespace,
+        )
+        relationships.append(
+            ResourceRelationship(
+                source=source,
+                target=endpoints_target,
+                relationship_type=RelationshipType.SERVICE_ENDPOINT,
+                details="Service manages Endpoints",
+            )
+        )
+
+        return relationships
+
+    def _discover_endpoints_relationships(
+        self, resource: dict[str, Any]
+    ) -> list[ResourceRelationship]:
+        """Discover relationships from Endpoints to Pods."""
+        relationships: list[ResourceRelationship] = []
+
+        try:
+            source = self._extract_resource_identifier(resource)
+        except ValueError:
+            return relationships
+
+        # Endpoints contain subsets with addresses that reference Pods
+        subsets = resource.get("subsets", [])
+        for subset in subsets:
+            addresses = subset.get("addresses", [])
+            for address in addresses:
+                target_ref = address.get("targetRef", {})
+                if target_ref.get("kind") == "Pod":
+                    pod_name = target_ref.get("name")
+                    pod_namespace = target_ref.get("namespace")
+                    if pod_name:
+                        target = ResourceIdentifier(
+                            kind="Pod",
+                            name=pod_name,
+                            namespace=pod_namespace or source.namespace,
+                        )
+                        relationships.append(
+                            ResourceRelationship(
+                                source=source,
+                                target=target,
+                                relationship_type=RelationshipType.SERVICE_ENDPOINT,
+                                details=f"Endpoints routes to Pod IP {address.get('ip')}",
+                            )
+                        )
 
         return relationships
 
@@ -557,7 +612,7 @@ class NativeResourceDiscoverer(BaseDiscoverer):
                                     details="ReplicaSet owns Pod",
                                 )
                             )
-                            break
+                            break  # Break inner loop after finding matching owner ref
             except Exception as e:
                 logger.debug(f"Error discovering owned Pods for ReplicaSet/{source.name}: {e}")
 

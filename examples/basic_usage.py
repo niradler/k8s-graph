@@ -46,7 +46,7 @@ async def main():
             print(f"  Issue: {issue['message']}")
 
     api_stats = client.get_api_call_stats()
-    print(f"\nKubernetes API Statistics:")
+    print("\nKubernetes API Statistics:")
     print(f"  get_resource calls: {api_stats['get_resource']}")
     print(f"  list_resources calls: {api_stats['list_resources']}")
     print(f"  Total API calls: {api_stats['total']}")

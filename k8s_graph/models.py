@@ -119,6 +119,10 @@ class BuildOptions(BaseModel):
     include_network: bool = Field(default=True, description="Include NetworkPolicy relationships")
     include_crds: bool = Field(default=True, description="Include custom resource definitions")
     max_nodes: int = Field(default=500, description="Maximum number of nodes in the graph", gt=0)
+    sample_pods: bool = Field(
+        default=True,
+        description="Sample pods by template (only include one pod per ReplicaSet). Set to False to show all pods.",
+    )
     cluster_id: str | None = Field(
         default=None, description="Optional cluster identifier for multi-cluster scenarios"
     )

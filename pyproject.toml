@@ -26,6 +26,7 @@ dependencies = [
     "pydantic>=2.12.4",
     "kubernetes>=34.1.0",
     "matplotlib>=3.10.7",
+    "pygraphviz>=1.11",
 ]
 
 [project.optional-dependencies]
@@ -140,6 +141,7 @@ module = [
     "networkx.*",
     "kubernetes.*",
     "pydot.*",
+    "pygraphviz.*",
 ]
 ignore_missing_imports = true
 
