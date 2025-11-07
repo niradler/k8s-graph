@@ -78,7 +78,6 @@ tmp/
 
 # Test outputs & generated files
 test-output/
-docs/images/
 scripts/
 *_graph.json
 *_graph.txt
