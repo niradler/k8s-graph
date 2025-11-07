@@ -34,6 +34,7 @@ from k8s_graph.discoverers.unified import UnifiedDiscoverer
 from k8s_graph.formatter import export_to_dot, format_graph_output
 from k8s_graph.models import (
     BuildOptions,
+    DiscovererCategory,
     DiscoveryOptions,
     RelationshipType,
     ResourceIdentifier,
@@ -113,6 +114,7 @@ except ImportError:
 __all__ = [
     "__version__",
     "BuildOptions",
+    "DiscovererCategory",
     "DiscoveryOptions",
     "RelationshipType",
     "ResourceIdentifier",

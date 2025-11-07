@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 from k8s_graph.discoverers.registry import DiscovererRegistry
-from k8s_graph.models import DiscoveryOptions, ResourceRelationship
+from k8s_graph.models import DiscovererCategory, DiscoveryOptions, ResourceRelationship
 from k8s_graph.protocols import K8sClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ class UnifiedDiscoverer:
         options: DiscoveryOptions,
     ) -> list[Any]:
         """
-        Filter discoverers based on discovery options.
+        Filter discoverers based on discovery options using category flags.
 
         Args:
             discoverers: List of discoverers
@@ -123,14 +123,20 @@ class UnifiedDiscoverer:
         filtered = []
 
         for discoverer in discoverers:
-            discoverer_class = discoverer.__class__.__name__
+            categories = discoverer.categories
 
-            if "RBAC" in discoverer_class and not options.include_rbac:
-                logger.debug(f"Skipping {discoverer_class} (RBAC disabled)")
+            if (categories & DiscovererCategory.RBAC) and not options.include_rbac:
+                logger.debug(f"Skipping {discoverer.__class__.__name__} (RBAC category disabled)")
                 continue
 
-            if "Network" in discoverer_class and not options.include_network:
-                logger.debug(f"Skipping {discoverer_class} (Network disabled)")
+            if (categories & DiscovererCategory.NETWORK) and not options.include_network:
+                logger.debug(
+                    f"Skipping {discoverer.__class__.__name__} (Network category disabled)"
+                )
+                continue
+
+            if (categories & DiscovererCategory.CRD) and not options.include_crds:
+                logger.debug(f"Skipping {discoverer.__class__.__name__} (CRD category disabled)")
                 continue
 
             filtered.append(discoverer)
@@ -143,6 +149,9 @@ class UnifiedDiscoverer:
         """
         Safely execute a discoverer, catching and logging exceptions.
 
+        Injects the client into the discoverer if it doesn't have one,
+        enabling discoverers to query for child resources.
+
         Args:
             discoverer: Discoverer instance
             resource: Resource to discover relationships for
@@ -151,6 +160,12 @@ class UnifiedDiscoverer:
             List of relationships or empty list on error
         """
         try:
+            # Inject client if discoverer doesn't have one
+            # This allows registry discoverers to access the K8s API
+            if hasattr(discoverer, "client") and discoverer.client is None:
+                discoverer.client = self.client
+                logger.debug(f"Injected client into {discoverer.__class__.__name__}")
+
             relationships = await discoverer.discover(resource)
             logger.debug(
                 f"{discoverer.__class__.__name__} found {len(relationships)} relationships "

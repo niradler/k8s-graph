@@ -1,6 +1,6 @@
 from typing import Any, Protocol, runtime_checkable
 
-from k8s_graph.models import ResourceIdentifier, ResourceRelationship
+from k8s_graph.models import DiscovererCategory, ResourceIdentifier, ResourceRelationship
 
 
 @runtime_checkable
@@ -157,5 +157,25 @@ class DiscovererProtocol(Protocol):
             - User-defined handlers: 100 (highest priority, can override built-ins)
             - Built-in handlers: 50 (standard priority)
             - Fallback handlers: 10 (lowest priority)
+        """
+        ...
+
+    @property
+    def categories(self) -> DiscovererCategory:
+        """
+        Categories this discoverer belongs to.
+
+        Used for filtering based on DiscoveryOptions. Discoverers can belong
+        to multiple categories by combining flags (e.g., RBAC | NATIVE).
+
+        Returns:
+            DiscovererCategory flags
+
+        Note:
+            Categories:
+            - NATIVE: Built-in Kubernetes resources (Pod, Service, etc.)
+            - RBAC: RBAC-related resources (Role, RoleBinding, ServiceAccount, etc.)
+            - NETWORK: Network-related resources (NetworkPolicy, etc.)
+            - CRD: Custom resource definitions
         """
         ...

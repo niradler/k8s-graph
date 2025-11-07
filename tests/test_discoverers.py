@@ -20,14 +20,16 @@ async def test_native_discoverer_supports():
 
 @pytest.mark.asyncio
 async def test_native_discover_owner_references(sample_pod):
-    """Test discovering owner references."""
+    """Test discovering owner references (parent → child direction)."""
     discoverer = NativeResourceDiscoverer()
     relationships = await discoverer.discover(sample_pod)
 
-    owner_rels = [r for r in relationships if r.relationship_type == RelationshipType.OWNER]
+    # After fix: edges go from parent to child (ReplicaSet → Pod)
+    owner_rels = [r for r in relationships if r.relationship_type == RelationshipType.OWNED]
     assert len(owner_rels) == 1
-    assert owner_rels[0].target.kind == "ReplicaSet"
-    assert owner_rels[0].target.name == "nginx-deployment-abc123"
+    assert owner_rels[0].source.kind == "ReplicaSet"  # Parent is source
+    assert owner_rels[0].source.name == "nginx-deployment-abc123"
+    assert owner_rels[0].target.kind == "Pod"  # Child is target
 
 
 @pytest.mark.asyncio

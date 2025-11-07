@@ -208,9 +208,8 @@ class GraphBuilder:
             visited: Set of visited node IDs
             options: Build options
         """
-        # Generate node ID - use actual name if not sampling pods
+        # Generate node ID
         if not options.sample_pods and resource.get("kind") == "Pod":
-            # Use actual pod name instead of template-based ID
             metadata = resource.get("metadata", {})
             namespace = metadata.get("namespace") or "cluster"
             node_id = f"Pod:{namespace}:{metadata.get('name')}"
@@ -304,7 +303,13 @@ class GraphBuilder:
             resource_id_map: dict[tuple[str, str | None, str], str] = {}
             for res_id, resource_data in fetched_resources.items():
                 if resource_data:
-                    stable_node_id = self.node_identity.get_node_id(resource_data)
+                    if not options.sample_pods and resource_data.get("kind") == "Pod":
+                        metadata = resource_data.get("metadata", {})
+                        namespace = metadata.get("namespace") or "cluster"
+                        stable_node_id = f"Pod:{namespace}:{metadata.get('name')}"
+                    else:
+                        stable_node_id = self.node_identity.get_node_id(resource_data)
+                    
                     resource_id_map[res_id] = stable_node_id
 
                     if not graph.has_node(stable_node_id):
@@ -321,7 +326,7 @@ class GraphBuilder:
                 if source_id.kind == current_kind and source_id.name == current_name:
                     source_node_id = node_id
                 else:
-                    source_node_id = resource_id_map.get(source_key)
+                    source_node_id = resource_id_map.get(source_key)  # type: ignore[assignment]
 
                 target_node_id = resource_id_map.get(target_key)
 
@@ -365,7 +370,7 @@ class GraphBuilder:
             # Expand from fetched resources
             for res_key, resource_data in fetched_resources.items():
                 if resource_data:
-                    stable_node_id = resource_id_map.get(res_key)
+                    stable_node_id = resource_id_map.get(res_key)  # type: ignore[assignment]
                     if (
                         stable_node_id
                         and stable_node_id not in visited
@@ -517,7 +522,7 @@ class GraphBuilder:
                 for name in missing_names:
                     try:
                         res_id = ResourceIdentifier(kind=kind, name=name, namespace=namespace)
-                        resource = await self.client.get_resource(res_id)
+                        resource = await self.client.get_resource(res_id)  # type: ignore[assignment]
                         if resource:
                             fetch_key = (kind, namespace, name)
                             fetched[fetch_key] = resource
@@ -530,12 +535,25 @@ class GraphBuilder:
         """
         Get information about pod template sampling.
 
+        Only relevant when BuildOptions.sample_pods=True. Returns statistics
+        about how many unique pod templates were found vs estimated total pods.
+
         Returns:
             Dictionary with pod sampling information including:
-            - sampled_count: Number of pod templates
-            - total_count: Estimated total pods represented
-            - templates: List of template information
+            - sampled_count: Number of unique pod templates found
+            - total_count: Estimated total pods represented (templates * avg replicas)
+            - templates: List of template information (pod names shown)
+
+        Note:
+            Returns zeros if sample_pods=False (no sampling performed).
         """
+        if not self._pod_templates:
+            return {
+                "sampled_count": 0,
+                "total_count": 0,
+                "templates": [],
+            }
+
         total_count = len(self._pod_templates) * 3
         return {
             "sampled_count": len(self._pod_templates),

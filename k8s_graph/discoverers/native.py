@@ -2,7 +2,12 @@ import logging
 from typing import Any
 
 from k8s_graph.discoverers.base import BaseDiscoverer
-from k8s_graph.models import RelationshipType, ResourceIdentifier, ResourceRelationship
+from k8s_graph.models import (
+    DiscovererCategory,
+    RelationshipType,
+    ResourceIdentifier,
+    ResourceRelationship,
+)
 from k8s_graph.protocols import K8sClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -13,15 +18,17 @@ class NativeResourceDiscoverer(BaseDiscoverer):
     Discoverer for native Kubernetes resource relationships.
 
     Handles standard relationships including:
-    - Owner references (ReplicaSet -> Deployment)
-    - Owned resources (Deployment -> ReplicaSets -> Pods)
+    - Owner references (ReplicaSet -> Deployment, Pod -> Job)
+    - Owned resources (Deployment -> ReplicaSets -> Pods, CronJob -> Jobs -> Pods)
     - Label selectors (Service -> Pods)
     - Volume mounts (Pod -> ConfigMap/Secret/PVC)
     - Environment variables (Pod -> ConfigMap/Secret)
-    - Service accounts (Pod -> ServiceAccount)
+    - Service accounts (Pod/Job/CronJob -> ServiceAccount)
     - Service endpoints (Service -> Pods)
     - Ingress backends (Ingress -> Service)
-    - PV/PVC relationships
+    - PV/PVC relationships (PVC -> PV, Pod -> PVC)
+    - Autoscaling (HPA -> Deployment/StatefulSet/ReplicaSet)
+    - Pod disruption (PDB -> Deployment/StatefulSet)
     """
 
     def __init__(self, client: K8sClientProtocol | None = None) -> None:
@@ -29,6 +36,10 @@ class NativeResourceDiscoverer(BaseDiscoverer):
 
     def supports(self, resource: dict[str, Any]) -> bool:
         return True
+
+    @property
+    def categories(self) -> DiscovererCategory:
+        return DiscovererCategory.NATIVE
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships: list[ResourceRelationship] = []
@@ -53,10 +64,24 @@ class NativeResourceDiscoverer(BaseDiscoverer):
             relationships.extend(self._discover_pv_relationships(resource))
         elif kind in ["Deployment", "StatefulSet", "DaemonSet", "ReplicaSet"]:
             relationships.extend(await self._discover_workload_relationships(resource))
+        elif kind == "Job":
+            relationships.extend(await self._discover_job_relationships(resource))
+        elif kind == "CronJob":
+            relationships.extend(await self._discover_cronjob_relationships(resource))
+        elif kind == "HorizontalPodAutoscaler":
+            relationships.extend(self._discover_hpa_relationships(resource))
+        elif kind == "PodDisruptionBudget":
+            relationships.extend(self._discover_pdb_relationships(resource))
 
         return relationships
 
     def _discover_owner_references(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
+        """
+        Discover owner reference relationships.
+
+        Creates edges from parent to child for proper K8s hierarchy visualization:
+        Deployment → ReplicaSet → Pod
+        """
         relationships: list[ResourceRelationship] = []
         metadata = resource.get("metadata", {})
         owner_refs = metadata.get("ownerReferences", [])
@@ -65,7 +90,7 @@ class NativeResourceDiscoverer(BaseDiscoverer):
             return relationships
 
         try:
-            source = self._extract_resource_identifier(resource)
+            child = self._extract_resource_identifier(resource)
         except ValueError as e:
             logger.warning(f"Cannot extract resource identifier: {e}")
             return relationships
@@ -78,19 +103,20 @@ class NativeResourceDiscoverer(BaseDiscoverer):
             if not owner_kind or not owner_name:
                 continue
 
-            target = ResourceIdentifier(
+            parent = ResourceIdentifier(
                 kind=owner_kind,
                 name=owner_name,
                 namespace=metadata.get("namespace"),
                 api_version=owner_api_version,
             )
 
+            # Create edge from parent to child (correct hierarchy direction)
             relationships.append(
                 ResourceRelationship(
-                    source=source,
-                    target=target,
-                    relationship_type=RelationshipType.OWNER,
-                    details=f"{source.kind} owned by {owner_kind}",
+                    source=parent,
+                    target=child,
+                    relationship_type=RelationshipType.OWNED,
+                    details=f"{owner_kind} owns {child.kind}",
                 )
             )
 
@@ -615,5 +641,223 @@ class NativeResourceDiscoverer(BaseDiscoverer):
                             break  # Break inner loop after finding matching owner ref
             except Exception as e:
                 logger.debug(f"Error discovering owned Pods for ReplicaSet/{source.name}: {e}")
+
+        return relationships
+
+    async def _discover_job_relationships(
+        self, resource: dict[str, Any]
+    ) -> list[ResourceRelationship]:
+        """
+        Discover relationships for Job resources.
+
+        Jobs:
+        - Own Pods
+        - Reference ServiceAccount (from pod template)
+        - Reference ConfigMaps/Secrets (from pod template)
+        """
+        relationships: list[ResourceRelationship] = []
+
+        try:
+            source = self._extract_resource_identifier(resource)
+        except ValueError:
+            return relationships
+
+        spec = resource.get("spec", {})
+        template = spec.get("template", {})
+        template_spec = template.get("spec", {})
+
+        service_account_name = template_spec.get("serviceAccountName") or template_spec.get(
+            "serviceAccount"
+        )
+        if service_account_name:
+            target = ResourceIdentifier(
+                kind="ServiceAccount",
+                name=service_account_name,
+                namespace=source.namespace,
+            )
+            relationships.append(
+                ResourceRelationship(
+                    source=source,
+                    target=target,
+                    relationship_type=RelationshipType.SERVICE_ACCOUNT,
+                    details="Job uses ServiceAccount",
+                )
+            )
+
+        if self.client:
+            try:
+                pods, _ = await self.client.list_resources(kind="Pod", namespace=source.namespace)
+
+                source_name = source.name
+
+                for pod in pods:
+                    owner_refs = pod.get("metadata", {}).get("ownerReferences", [])
+                    for owner_ref in owner_refs:
+                        if owner_ref.get("name") == source_name and owner_ref.get("kind") == "Job":
+                            pod_metadata = pod.get("metadata", {})
+                            target = ResourceIdentifier(
+                                kind="Pod",
+                                name=pod_metadata.get("name"),
+                                namespace=pod_metadata.get("namespace"),
+                            )
+                            relationships.append(
+                                ResourceRelationship(
+                                    source=source,
+                                    target=target,
+                                    relationship_type=RelationshipType.OWNED,
+                                    details="Job owns Pod",
+                                )
+                            )
+                            break
+            except Exception as e:
+                logger.debug(f"Error discovering owned Pods for Job/{source.name}: {e}")
+
+        return relationships
+
+    async def _discover_cronjob_relationships(
+        self, resource: dict[str, Any]
+    ) -> list[ResourceRelationship]:
+        """
+        Discover relationships for CronJob resources.
+
+        CronJobs:
+        - Create Jobs
+        - Reference ServiceAccount (from job template)
+        """
+        relationships: list[ResourceRelationship] = []
+
+        try:
+            source = self._extract_resource_identifier(resource)
+        except ValueError:
+            return relationships
+
+        spec = resource.get("spec", {})
+        job_template = spec.get("jobTemplate", {})
+        job_spec = job_template.get("spec", {})
+        template = job_spec.get("template", {})
+        template_spec = template.get("spec", {})
+
+        service_account_name = template_spec.get("serviceAccountName") or template_spec.get(
+            "serviceAccount"
+        )
+        if service_account_name:
+            target = ResourceIdentifier(
+                kind="ServiceAccount",
+                name=service_account_name,
+                namespace=source.namespace,
+            )
+            relationships.append(
+                ResourceRelationship(
+                    source=source,
+                    target=target,
+                    relationship_type=RelationshipType.SERVICE_ACCOUNT,
+                    details="CronJob uses ServiceAccount",
+                )
+            )
+
+        if self.client:
+            try:
+                jobs, _ = await self.client.list_resources(kind="Job", namespace=source.namespace)
+
+                source_name = source.name
+
+                for job in jobs:
+                    owner_refs = job.get("metadata", {}).get("ownerReferences", [])
+                    for owner_ref in owner_refs:
+                        if (
+                            owner_ref.get("name") == source_name
+                            and owner_ref.get("kind") == "CronJob"
+                        ):
+                            job_metadata = job.get("metadata", {})
+                            target = ResourceIdentifier(
+                                kind="Job",
+                                name=job_metadata.get("name"),
+                                namespace=job_metadata.get("namespace"),
+                            )
+                            relationships.append(
+                                ResourceRelationship(
+                                    source=source,
+                                    target=target,
+                                    relationship_type=RelationshipType.OWNED,
+                                    details="CronJob creates Job",
+                                )
+                            )
+                            break
+            except Exception as e:
+                logger.debug(f"Error discovering owned Jobs for CronJob/{source.name}: {e}")
+
+        return relationships
+
+    def _discover_hpa_relationships(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
+        """
+        Discover relationships for HorizontalPodAutoscaler resources.
+
+        HPA scales target workloads (Deployment, StatefulSet, ReplicaSet).
+        """
+        relationships: list[ResourceRelationship] = []
+
+        try:
+            source = self._extract_resource_identifier(resource)
+        except ValueError:
+            return relationships
+
+        spec = resource.get("spec", {})
+        scale_target_ref = spec.get("scaleTargetRef", {})
+
+        target_kind = scale_target_ref.get("kind")
+        target_name = scale_target_ref.get("name")
+
+        if target_kind and target_name:
+            target = ResourceIdentifier(
+                kind=target_kind,
+                name=target_name,
+                namespace=source.namespace,
+                api_version=scale_target_ref.get("apiVersion"),
+            )
+            relationships.append(
+                ResourceRelationship(
+                    source=source,
+                    target=target,
+                    relationship_type=RelationshipType.AUTOSCALING,
+                    details=f"HPA scales {target_kind}",
+                )
+            )
+
+        return relationships
+
+    def _discover_pdb_relationships(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
+        """
+        Discover relationships for PodDisruptionBudget resources.
+
+        PDB protects pods via label selector.
+        """
+        relationships: list[ResourceRelationship] = []
+
+        try:
+            source = self._extract_resource_identifier(resource)
+        except ValueError:
+            return relationships
+
+        spec = resource.get("spec", {})
+        selector = spec.get("selector", {})
+
+        if not selector:
+            return relationships
+
+        match_labels = selector.get("matchLabels", {})
+        if match_labels:
+            target = ResourceIdentifier(
+                kind="Pod",
+                name=f"*[{self._parse_label_selector(match_labels)}]",
+                namespace=source.namespace,
+            )
+            relationships.append(
+                ResourceRelationship(
+                    source=source,
+                    target=target,
+                    relationship_type=RelationshipType.POD_DISRUPTION_BUDGET,
+                    details=f"PDB protects pods with labels: {self._parse_label_selector(match_labels)}",
+                )
+            )
 
         return relationships

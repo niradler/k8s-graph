@@ -1,0 +1,30 @@
+# Include important files in source distribution
+include README.md
+include LICENSE
+include pyproject.toml
+include Makefile
+
+# Include all package data
+recursive-include k8s_graph *.py
+recursive-include k8s_graph/adapters *.py
+recursive-include k8s_graph/discoverers *.py
+
+# Exclude unnecessary files
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store
+exclude .gitignore
+exclude agents.md
+
+# Exclude development/test files from distribution
+exclude .venv
+exclude .pytest_cache
+exclude .mypy_cache
+exclude .ruff_cache
+exclude htmlcov
+exclude .coverage
+prune tests
+prune examples
+prune scripts
+prune build
+prune dist

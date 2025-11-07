@@ -1,6 +1,19 @@
-from enum import Enum
+from enum import Enum, Flag, auto
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class DiscovererCategory(Flag):
+    """
+    Categories for discoverers, used for filtering during graph building.
+
+    Uses Flag enum to support multiple categories per discoverer.
+    """
+
+    NATIVE = auto()
+    RBAC = auto()
+    NETWORK = auto()
+    CRD = auto()
 
 
 class ResourceIdentifier(BaseModel):
@@ -73,6 +86,8 @@ class RelationshipType(str, Enum):
     PV = "pv"
     STORAGE_CLASS = "storage_class"
     MANAGED = "managed"
+    AUTOSCALING = "autoscaling"
+    POD_DISRUPTION_BUDGET = "pod_disruption_budget"
 
 
 class ResourceRelationship(BaseModel):
@@ -120,8 +135,8 @@ class BuildOptions(BaseModel):
     include_crds: bool = Field(default=True, description="Include custom resource definitions")
     max_nodes: int = Field(default=500, description="Maximum number of nodes in the graph", gt=0)
     sample_pods: bool = Field(
-        default=True,
-        description="Sample pods by template (only include one pod per ReplicaSet). Set to False to show all pods.",
+        default=False,
+        description="Sample pods by template (only include one pod per ReplicaSet/template). Set to True for large clusters to reduce graph size.",
     )
     cluster_id: str | None = Field(
         default=None, description="Optional cluster identifier for multi-cluster scenarios"

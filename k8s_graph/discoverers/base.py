@@ -2,7 +2,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
-from k8s_graph.models import ResourceIdentifier, ResourceRelationship
+from k8s_graph.models import DiscovererCategory, ResourceIdentifier, ResourceRelationship
 from k8s_graph.protocols import K8sClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -89,6 +89,24 @@ class BaseDiscoverer(ABC):
             User-defined handlers should return 100.
         """
         return 50
+
+    @property
+    def categories(self) -> DiscovererCategory:
+        """
+        Categories this discoverer belongs to.
+
+        Used for filtering based on DiscoveryOptions. Discoverers can belong
+        to multiple categories by combining flags with |.
+
+        Returns:
+            DiscovererCategory flags
+
+        Example:
+            >>> @property
+            >>> def categories(self) -> DiscovererCategory:
+            >>>     return DiscovererCategory.RBAC | DiscovererCategory.NATIVE
+        """
+        return DiscovererCategory.NATIVE
 
     def _extract_resource_identifier(self, resource: dict[str, Any]) -> ResourceIdentifier:
         """

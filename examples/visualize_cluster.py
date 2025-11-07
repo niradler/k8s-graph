@@ -1,8 +1,10 @@
-import asyncio
-import sys
-from pathlib import Path
+"""
+Demonstrate visualization capabilities with various layouts.
+Shows shell, circular, spring, spectral layouts and dependency graphs.
+"""
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import asyncio
+from pathlib import Path
 
 from k8s_graph import (
     BuildOptions,
@@ -19,9 +21,7 @@ from k8s_graph import (
 
 
 async def demonstrate_visualization():
-    """
-    Demonstrate visualization capabilities with various layouts.
-    """
+    """Demonstrate visualization capabilities with various layouts."""
     print("=== K8s Graph Visualization Demo ===\n")
 
     client = KubernetesAdapter()
@@ -35,6 +35,10 @@ async def demonstrate_visualization():
     )
 
     print(f"Graph built: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges\n")
+
+    # Ensure output directory exists
+    output_dir = Path("test-output")
+    output_dir.mkdir(exist_ok=True)
 
     print("Creating visualizations:\n")
 

@@ -2,7 +2,12 @@ import logging
 from typing import Any
 
 from k8s_graph.discoverers.base import BaseDiscoverer
-from k8s_graph.models import RelationshipType, ResourceIdentifier, ResourceRelationship
+from k8s_graph.models import (
+    DiscovererCategory,
+    RelationshipType,
+    ResourceIdentifier,
+    ResourceRelationship,
+)
 from k8s_graph.protocols import K8sClientProtocol
 
 logger = logging.getLogger(__name__)
@@ -23,6 +28,10 @@ class NetworkPolicyDiscoverer(BaseDiscoverer):
 
     def supports(self, resource: dict[str, Any]) -> bool:
         return resource.get("kind") == "NetworkPolicy"
+
+    @property
+    def categories(self) -> DiscovererCategory:
+        return DiscovererCategory.NETWORK
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships: list[ResourceRelationship] = []

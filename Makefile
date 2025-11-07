@@ -1,9 +1,10 @@
 .PHONY: help install install-dev test test-cov lint format type-check check build clean
+.PHONY: validate examples
 
 help:
 	@echo "k8s-graph Makefile"
 	@echo ""
-	@echo "Available targets:"
+	@echo "Development:"
 	@echo "  install      - Install package with uv"
 	@echo "  install-dev  - Install with dev dependencies"
 	@echo "  test         - Run pytest"
@@ -12,6 +13,14 @@ help:
 	@echo "  format       - Format code with black"
 	@echo "  type-check   - Run mypy type checking"
 	@echo "  check        - Run all checks (format, lint, type-check, test)"
+	@echo ""
+	@echo "Validation & Use Cases:"
+	@echo "  validate         - Run all use case scenarios"
+	@echo "  validate-default - Build graph for default namespace"
+	@echo "  validate-deploy  - Build graph from specific deployment"
+	@echo "  examples         - Run example scripts"
+	@echo ""
+	@echo "Build & Clean:"
 	@echo "  build        - Build distribution packages"
 	@echo "  clean        - Remove build artifacts"
 
@@ -22,20 +31,20 @@ install-dev:
 	uv pip install -e ".[dev]"
 
 test:
-	.venv/bin/pytest -v
+	uv run pytest -v
 
 test-cov:
-	.venv/bin/pytest -v --cov=k8s_graph --cov-report=term-missing --cov-report=html
+	uv run pytest -v --cov=k8s_graph --cov-report=term-missing --cov-report=html
 
 lint:
-	.venv/bin/ruff check k8s_graph tests examples
+	uv run ruff check k8s_graph tests examples
 
 format:
-	.venv/bin/black k8s_graph tests examples
-	.venv/bin/ruff check --fix k8s_graph tests examples
+	uv run black k8s_graph tests examples
+	uv run ruff check --fix k8s_graph tests examples
 
 type-check:
-	.venv/bin/mypy k8s_graph
+	uv run mypy k8s_graph
 
 check: format lint type-check test-cov
 
@@ -54,3 +63,21 @@ clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete
 
+validate:
+	@echo "🔍 Running all use cases..."
+	uv run python scripts/use_cases.py --all-use-cases
+
+validate-default:
+	@echo "🔍 Building default namespace graph..."
+	uv run python scripts/use_cases.py --namespace default
+
+validate-deploy:
+	@echo "🔍 Building graph from deployment..."
+	uv run python scripts/use_cases.py --resource Deployment/crashloop-deploy-6444 --namespace default
+
+examples:
+	@echo "🚀 Running examples..."
+	@for file in examples/*.py; do \
+		echo "Running $$file..."; \
+		uv run python $$file || true; \
+	done

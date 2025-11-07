@@ -6,13 +6,12 @@ authors = [
     {name = "K8s Graph Contributors"}
 ]
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.11"
 keywords = ["kubernetes", "k8s", "graph", "networkx", "visualization", "cloud-native"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -37,6 +36,7 @@ dev = [
     "black>=24.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "pyvis>=0.3.2",
 ]
 
 [project.urls]
@@ -149,4 +149,9 @@ ignore_missing_imports = true
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+[dependency-groups]
+dev = [
+    "pyvis>=0.3.2",
+]
 

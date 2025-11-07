@@ -1,8 +1,10 @@
-import asyncio
-import sys
-from pathlib import Path
+"""
+Demonstrate the query API for exploring K8s resource graphs.
+Shows path finding, filtering, neighborhood queries, and persistence.
+"""
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+import asyncio
+from pathlib import Path
 
 from k8s_graph import (
     BuildOptions,
@@ -22,9 +24,7 @@ from k8s_graph import (
 
 
 async def demonstrate_query_api():
-    """
-    Demonstrate the query API with a real Kubernetes cluster.
-    """
+    """Demonstrate the query API with a real Kubernetes cluster."""
     print("=== K8s Graph Query API Demo ===\n")
 
     client = KubernetesAdapter()
@@ -38,6 +38,10 @@ async def demonstrate_query_api():
     )
 
     print(f"Graph built: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges\n")
+
+    # Ensure output directory exists
+    output_dir = Path("test-output")
+    output_dir.mkdir(exist_ok=True)
 
     save_graph(graph, "test-output/query_demo_graph.json")
     print("Saved graph to test-output/query_demo_graph.json\n")
