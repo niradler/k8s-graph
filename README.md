@@ -22,6 +22,26 @@
 - **Type-Safe**: Comprehensive type hints and Pydantic models
 - **Production Ready**: Async/await throughout, graceful error handling
 
+## Visualizations
+
+### Complete Namespace Graph
+
+Full namespace visualization showing all resources and their relationships:
+
+![Complete Namespace](docs/images/showcase_full_namespace.png)
+
+### Deployment with Dependencies
+
+Focused view of a single deployment with its dependencies (ReplicaSet, Pods, ConfigMaps, Secrets):
+
+![Deployment Dependencies](docs/images/showcase_deployment_with_dependencies.png)
+
+### Service Mesh Connections
+
+Service-to-service connections and network topology:
+
+![Service Connections](docs/images/showcase_service_connections.png)
+
 ## Installation
 
 ```bash
