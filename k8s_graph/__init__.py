@@ -31,6 +31,14 @@ from k8s_graph.discoverers.network import NetworkPolicyDiscoverer
 from k8s_graph.discoverers.rbac import RBACDiscoverer
 from k8s_graph.discoverers.registry import DiscovererRegistry
 from k8s_graph.discoverers.unified import UnifiedDiscoverer
+from k8s_graph.export import (
+    aggregate_isolated_nodes,
+    export_all,
+    export_html,
+    export_json,
+    export_png,
+    load_json,
+)
 from k8s_graph.formatter import export_to_dot, format_graph_output
 from k8s_graph.models import (
     BuildOptions,
@@ -97,9 +105,12 @@ from k8s_graph.validator import (
 )
 from k8s_graph.visualization import (
     create_legend,
+    draw_circular,
     draw_cluster,
     draw_dependencies,
+    draw_hierarchical,
     draw_namespace,
+    draw_radial,
     draw_with_shell_layout,
     get_shell_layout,
 )
@@ -178,8 +189,17 @@ __all__ = [
     "draw_namespace",
     "draw_dependencies",
     "draw_with_shell_layout",
+    "draw_hierarchical",
+    "draw_radial",
+    "draw_circular",
     "get_shell_layout",
     "create_legend",
+    "export_png",
+    "export_html",
+    "export_json",
+    "export_all",
+    "load_json",
+    "aggregate_isolated_nodes",
 ]
 
 if _has_kubernetes:

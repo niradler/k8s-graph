@@ -179,24 +179,18 @@ def _format_minimal(graph: nx.DiGraph, include_metadata: bool) -> str:
 
 def export_to_dot(graph: nx.DiGraph, output_file: str) -> None:
     """
-    Export graph to Graphviz DOT format for visualization.
-
-    DEPRECATED: Use k8s_graph.visualization.export_to_dot() instead.
-    This is kept for backward compatibility.
+    Export graph to Graphviz DOT format.
 
     Args:
         graph: NetworkX directed graph
         output_file: Path to output DOT file
 
     Example:
-        >>> from k8s_graph.visualization import export_to_dot
         >>> export_to_dot(graph, "cluster.dot")
         >>> # Then: dot -Tpng cluster.dot -o cluster.png
     """
-    logger.warning(
-        "formatter.export_to_dot() is deprecated. "
-        "Use k8s_graph.visualization.export_to_dot() instead."
-    )
-    from k8s_graph.visualization import export_to_dot as viz_export_to_dot
-
-    viz_export_to_dot(graph, output_file)
+    try:
+        nx.drawing.nx_pydot.write_dot(graph, output_file)
+    except ImportError:
+        logger.error("pydot is required for DOT export. Install with: pip install pydot")
+        raise

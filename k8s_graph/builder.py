@@ -309,7 +309,7 @@ class GraphBuilder:
                         stable_node_id = f"Pod:{namespace}:{metadata.get('name')}"
                     else:
                         stable_node_id = self.node_identity.get_node_id(resource_data)
-                    
+
                     resource_id_map[res_id] = stable_node_id
 
                     if not graph.has_node(stable_node_id):
