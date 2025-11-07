@@ -75,6 +75,9 @@ validate-deploy:
 	@echo "🔍 Building graph from deployment..."
 	uv run python scripts/use_cases.py --resource Deployment/crashloop-deploy-6444 --namespace default
 
+publish:
+	uv publish
+
 examples:
 	@echo "🚀 Running examples..."
 	@for file in examples/*.py; do \
