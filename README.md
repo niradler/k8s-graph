@@ -212,13 +212,171 @@ k8s-graph automatically discovers relationships:
 - **ingress_backend**: Ingress → Service
 - **pvc**: Pod → PersistentVolumeClaim
 
-### Performance
+## Use Cases
 
-On a typical cluster namespace:
-- **88% graph connectivity** (only 12% orphaned resources)
-- **Multiple relationship types** discovered per resource
-- **Handles 400+ edges** efficiently
-- **Graceful error handling** for permission errors
+### Troubleshooting & Investigation
+
+**Find why a pod is failing:**
+```python
+# Build graph from deployment
+graph = await builder.build_from_resource(
+    ResourceIdentifier(kind="Deployment", name="my-app", namespace="production"),
+    depth=3,
+    options=BuildOptions()
+)
+
+# Find all secrets and configmaps
+for node_id, attrs in graph.nodes(data=True):
+    if attrs['kind'] in ['Secret', 'ConfigMap']:
+        print(f"{attrs['kind']}: {attrs['name']}")
+```
+
+**Trace service dependencies:**
+```python
+# Build from service
+graph = await builder.build_from_resource(
+    ResourceIdentifier(kind="Service", name="api-gateway", namespace="default"),
+    depth=2,
+    options=BuildOptions()
+)
+
+# Find all connected pods
+pods = [attrs for _, attrs in graph.nodes(data=True) if attrs['kind'] == 'Pod']
+print(f"Service connects to {len(pods)} pods")
+```
+
+**Audit secret usage across namespace:**
+```python
+# Build complete namespace
+graph = await builder.build_namespace_graph("production", depth=5, options=BuildOptions())
+
+# Find all resources using secrets
+import networkx as nx
+secret_users = {}
+for node_id, attrs in graph.nodes(data=True):
+    if attrs['kind'] == 'Secret':
+        secret_name = attrs['name']
+        # Find predecessors (resources using this secret)
+        users = list(graph.predecessors(node_id))
+        secret_users[secret_name] = len(users)
+
+for secret, count in sorted(secret_users.items(), key=lambda x: x[1], reverse=True):
+    print(f"{secret}: used by {count} resources")
+```
+
+## Advanced NetworkX Operations
+
+Since k8s-graph returns standard NetworkX graphs, you can leverage all NetworkX capabilities:
+
+### Path Analysis
+
+**Find dependency path between resources:**
+```python
+import networkx as nx
+
+# Find path from deployment to secret
+try:
+    path = nx.shortest_path(
+        graph,
+        source="Deployment:production:api-gateway",
+        target="Secret:production:db-credentials"
+    )
+    print("Dependency chain:", " → ".join([graph.nodes[n]['kind'] for n in path]))
+except nx.NetworkXNoPath:
+    print("No direct dependency path found")
+```
+
+### Subgraph Extraction
+
+**Extract workloads only:**
+```python
+# Filter to workload resources
+workload_kinds = ['Deployment', 'StatefulSet', 'DaemonSet', 'Job']
+workload_nodes = [
+    n for n, attrs in graph.nodes(data=True) 
+    if attrs.get('kind') in workload_kinds
+]
+workload_graph = graph.subgraph(workload_nodes)
+```
+
+**Extract configuration layer:**
+```python
+# Get all ConfigMaps, Secrets, and what uses them
+config_kinds = ['ConfigMap', 'Secret']
+config_nodes = [n for n, attrs in graph.nodes(data=True) if attrs.get('kind') in config_kinds]
+
+# Include resources that use them
+extended_nodes = set(config_nodes)
+for node in config_nodes:
+    extended_nodes.update(graph.predecessors(node))
+
+config_graph = graph.subgraph(extended_nodes)
+```
+
+### Graph Analysis
+
+**Find most connected resources (hubs):**
+```python
+# Calculate degree centrality
+centrality = nx.degree_centrality(graph)
+top_resources = sorted(centrality.items(), key=lambda x: x[1], reverse=True)[:10]
+
+for node_id, score in top_resources:
+    attrs = graph.nodes[node_id]
+    print(f"{attrs['kind']}/{attrs['name']}: {score:.3f}")
+```
+
+**Detect isolated resources:**
+```python
+# Find resources with no connections
+undirected = graph.to_undirected()
+isolated = list(nx.isolates(undirected))
+
+print(f"Found {len(isolated)} isolated resources:")
+for node_id in isolated:
+    attrs = graph.nodes[node_id]
+    print(f"  {attrs['kind']}/{attrs['name']}")
+```
+
+**Analyze connectivity:**
+```python
+# Check graph connectivity
+undirected = graph.to_undirected()
+components = list(nx.connected_components(undirected))
+
+print(f"Graph has {len(components)} connected components")
+print(f"Largest component: {len(max(components, key=len))} nodes")
+```
+
+### Export & Visualization
+
+**Export to different formats:**
+```python
+from k8s_graph import export_json, export_png, export_html
+
+# JSON for programmatic use
+export_json(graph, "cluster.json")
+
+# PNG for documentation
+export_png(graph, "cluster.png", title="Production Cluster", aggregate=True)
+
+# Interactive HTML
+export_html(graph, "cluster.html", title="Production Cluster", aggregate=True)
+```
+
+**Custom NetworkX exports:**
+```python
+import networkx as nx
+
+# GraphML for Gephi/Cytoscape
+nx.write_graphml(graph, "cluster.graphml")
+
+# GML format
+nx.write_gml(graph, "cluster.gml")
+
+# Edge list
+nx.write_edgelist(graph, "cluster.edgelist")
+```
 
 ## Development
 
