@@ -12,6 +12,7 @@ from k8s_graph.discoverers.handlers.knative import KnativeHandler
 from k8s_graph.discoverers.handlers.prometheus import PrometheusHandler
 from k8s_graph.discoverers.handlers.spark import SparkHandler
 from k8s_graph.discoverers.handlers.tekton import TektonHandler
+from k8s_graph.discoverers.handlers.temporal import TemporalHandler
 from k8s_graph.discoverers.handlers.velero import VeleroHandler
 
 
@@ -31,6 +32,7 @@ def get_all_handlers() -> list[BaseCRDHandler]:
         VeleroHandler(),
         SparkHandler(),
         CrossplaneHandler(),
+        TemporalHandler(),
     ]
 
 
@@ -50,6 +52,7 @@ __all__ = [
     "VeleroHandler",
     "SparkHandler",
     "CrossplaneHandler",
+    "TemporalHandler",
     "get_all_handlers",
 ]
 

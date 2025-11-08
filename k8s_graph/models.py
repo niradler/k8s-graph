@@ -103,6 +103,9 @@ class RelationshipType(str, Enum):
     SPARK_DRIVER = "spark_driver"
     SPARK_EXECUTOR = "spark_executor"
     CROSSPLANE_PROVISION = "crossplane_provision"
+    TEMPORAL_WORKER = "temporal_worker"
+    TEMPORAL_WORKFLOW = "temporal_workflow"
+    TEMPORAL_SCHEDULE = "temporal_schedule"
 
 
 class ResourceRelationship(BaseModel):
