@@ -160,6 +160,12 @@ class DiscovererRegistry:
         self.register(RBACDiscoverer())
         self.register(NetworkPolicyDiscoverer())
 
+        from k8s_graph.discoverers.handlers import get_all_handlers
+
+        for handler in get_all_handlers():
+            self.register(handler)
+            logger.debug(f"Registered CRD handler: {handler.__class__.__name__}")
+
         self._initialized = True
         logger.info(
             f"Initialized global registry with {len(self._discoverers)} built-in discoverers"
