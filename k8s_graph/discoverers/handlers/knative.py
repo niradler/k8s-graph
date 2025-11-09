@@ -94,7 +94,7 @@ class KnativeHandler(BaseCRDHandler):
                                             name=revision_name,
                                             namespace=namespace,
                                         ),
-                                        relationship_type=RelationshipType.ISTIO_ROUTE,
+                                        relationship_type=RelationshipType.KNATIVE_SERVES,
                                         details=f"Route traffic to Revision (weight: {traffic_target.get('percent', 100)}%)",
                                     )
                                 )
