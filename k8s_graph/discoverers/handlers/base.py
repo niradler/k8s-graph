@@ -12,6 +12,18 @@ class BaseCRDHandler(BaseDiscoverer):
     def categories(self) -> DiscovererCategory:
         return DiscovererCategory.CRD
 
+    def _parse_label_selector(self, label_selector: dict[str, str]) -> str:
+        """
+        Convert label selector dict to Kubernetes label selector string.
+        
+        Args:
+            label_selector: Dictionary of label key-value pairs
+            
+        Returns:
+            Comma-separated string like "app=nginx,env=prod"
+        """
+        return ",".join(f"{k}={v}" for k, v in label_selector.items())
+
     async def _find_resources_by_label(
         self,
         kind: str,

@@ -122,17 +122,19 @@ class TemporalHandler(BaseCRDHandler):
         cronjob_name = metadata.get("name")
         if cronjob_name and self.client:
             try:
-                jobs = await self._find_resources_by_label(
+                # List all jobs in namespace and filter by CronJob ownership
+                jobs, _ = await self.client.list_resources(
                     kind="Job",
                     namespace=namespace,
-                    label_selector={"batch.kubernetes.io/job-name": f"{cronjob_name}*"},
                 )
-
+                
+                # Filter jobs created by this CronJob
                 for job in jobs:
                     job_metadata = job.get("metadata", {})
                     job_name = job_metadata.get("name", "")
-
-                    if cronjob_name in job_name:
+                    
+                    # Jobs created by CronJobs have names like: {cronjob-name}-{timestamp}
+                    if job_name.startswith(f"{cronjob_name}-"):
                         job_id = ResourceIdentifier(
                             kind="Job",
                             name=job_name,
