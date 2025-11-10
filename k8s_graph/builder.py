@@ -170,6 +170,15 @@ class GraphBuilder:
         if options.include_network:
             resource_kinds.extend(["NetworkPolicy", "Ingress"])
 
+        if options.include_crds:
+            from k8s_graph.crd_registry import CRDRegistry
+
+            crd_registry = CRDRegistry.get_global()
+            registered_crds = crd_registry.list_registered_kinds()
+            if registered_crds:
+                resource_kinds.extend(registered_crds)
+                logger.debug(f"Added {len(registered_crds)} CRD kinds from registry")
+
         for kind in resource_kinds:
             if graph.number_of_nodes() >= options.max_nodes:
                 logger.warning(f"Reached max_nodes limit of {options.max_nodes}")

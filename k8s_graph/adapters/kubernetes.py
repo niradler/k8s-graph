@@ -4,6 +4,7 @@ from typing import Any
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
+from k8s_graph.crd_registry import CRDRegistry
 from k8s_graph.models import ResourceIdentifier
 
 logger = logging.getLogger(__name__)
@@ -25,14 +26,16 @@ class KubernetesAdapter:
         >>> client = KubernetesAdapter(context="production")
     """
 
-    def __init__(self, context: str | None = None):
+    def __init__(self, context: str | None = None, crd_registry: CRDRegistry | None = None):
         """
         Initialize the Kubernetes adapter.
 
         Args:
             context: Optional kubeconfig context name. If None, uses default context.
+            crd_registry: Optional CRD registry. If None, uses global registry.
         """
         self.context = context
+        self.crd_registry = crd_registry or CRDRegistry.get_global()
         self._api_call_stats = {"get_resource": 0, "list_resources": 0, "total": 0}
         self._load_config()
         self._build_api_mapping()
@@ -62,6 +65,7 @@ class KubernetesAdapter:
         self.storage_v1 = client.StorageV1Api()
         self.autoscaling_v2 = client.AutoscalingV2Api()
         self.policy_v1 = client.PolicyV1Api()
+        self.custom_objects = client.CustomObjectsApi()
 
     def _build_api_mapping(self) -> None:
         """Build mapping from resource kinds to API methods."""
@@ -264,6 +268,10 @@ class KubernetesAdapter:
         self._api_call_stats["get_resource"] += 1
         self._api_call_stats["total"] += 1
 
+        crd_info = self.crd_registry.get_crd_info(resource_id.kind)
+        if crd_info:
+            return await self._get_custom_resource(resource_id, crd_info)
+
         api_info = self._api_mapping.get(resource_id.kind)
         if not api_info:
             logger.warning(f"Unknown resource kind: {resource_id.kind}")
@@ -325,6 +333,10 @@ class KubernetesAdapter:
         """
         self._api_call_stats["list_resources"] += 1
         self._api_call_stats["total"] += 1
+
+        crd_info = self.crd_registry.get_crd_info(kind)
+        if crd_info:
+            return await self._list_custom_resources(kind, crd_info, namespace, label_selector)
 
         api_info = self._api_mapping.get(kind)
         if not api_info:
@@ -428,3 +440,68 @@ class KubernetesAdapter:
     def reset_api_call_stats(self) -> None:
         """Reset API call statistics to zero."""
         self._api_call_stats = {"get_resource": 0, "list_resources": 0, "total": 0}
+
+    async def _get_custom_resource(
+        self, resource_id: ResourceIdentifier, crd_info: dict[str, str]
+    ) -> dict[str, Any] | None:
+        """Get a CRD resource using CustomObjectsApi."""
+        try:
+            result = self.custom_objects.get_namespaced_custom_object(
+                group=crd_info["group"],
+                version=crd_info["version"],
+                namespace=resource_id.namespace,
+                plural=crd_info["plural"],
+                name=resource_id.name,
+            )
+            return result  # type: ignore[no-any-return]
+        except ApiException as e:
+            if e.status == 404:
+                logger.debug(f"CRD resource not found: {resource_id}")
+                return None
+            else:
+                logger.error(f"API error getting CRD {resource_id}: {e}")
+                raise
+
+    async def _list_custom_resources(
+        self,
+        kind: str,
+        crd_info: dict[str, str],
+        namespace: str | None = None,
+        label_selector: str | None = None,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """List CRD resources using CustomObjectsApi."""
+        try:
+            if namespace:
+                result = self.custom_objects.list_namespaced_custom_object(
+                    group=crd_info["group"],
+                    version=crd_info["version"],
+                    namespace=namespace,
+                    plural=crd_info["plural"],
+                    label_selector=label_selector,
+                )
+            else:
+                result = self.custom_objects.list_cluster_custom_object(
+                    group=crd_info["group"],
+                    version=crd_info["version"],
+                    plural=crd_info["plural"],
+                    label_selector=label_selector,
+                )
+
+            items = result.get("items", [])
+
+            for item in items:
+                if "kind" not in item:
+                    item["kind"] = kind
+                if "apiVersion" not in item:
+                    item["apiVersion"] = f"{crd_info['group']}/{crd_info['version']}"
+
+            metadata = {
+                "resource_version": result.get("metadata", {}).get("resourceVersion"),
+                "continue": result.get("metadata", {}).get("continue"),
+            }
+
+            return items, metadata  # type: ignore[return-value]
+
+        except ApiException as e:
+            logger.error(f"API error listing CRD {kind}: {e}")
+            return [], {}

@@ -8,30 +8,36 @@ logger = logging.getLogger(__name__)
 
 
 class KEDAHandler(BaseCRDHandler):
+    def get_crd_kinds(self) -> list[str]:
+        return ["ScaledObject", "ScaledJob"]
+
+    def get_crd_info(self, kind: str) -> dict[str, str] | None:
+        crd_map = {
+            "ScaledObject": {"group": "keda.sh", "version": "v1alpha1", "plural": "scaledobjects"},
+            "ScaledJob": {"group": "keda.sh", "version": "v1alpha1", "plural": "scaledjobs"},
+        }
+        return crd_map.get(kind)
+
     def supports(self, resource: dict[str, Any]) -> bool:
         kind = resource.get("kind")
         api_version = resource.get("apiVersion", "")
-        
-        return (
-            kind in ["ScaledObject", "ScaledJob"] and
-            "keda.sh" in api_version
-        )
+
+        return kind in self.get_crd_kinds() and "keda.sh" in api_version
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships = []
-        
+
         try:
-            kind = resource.get("kind")
             metadata = resource.get("metadata", {})
             spec = resource.get("spec", {})
             source_id = self._extract_resource_identifier(resource)
-            
+
             namespace = metadata.get("namespace")
-            
+
             scale_target_ref = spec.get("scaleTargetRef", {})
             target_kind = scale_target_ref.get("kind")
             target_name = scale_target_ref.get("name")
-            
+
             if target_kind and target_name and self.client:
                 try:
                     target = await self.client.get_resource(
@@ -41,7 +47,7 @@ class KEDAHandler(BaseCRDHandler):
                             namespace=namespace,
                         )
                     )
-                    
+
                     if target:
                         relationships.append(
                             ResourceRelationship(
@@ -57,11 +63,11 @@ class KEDAHandler(BaseCRDHandler):
                         )
                 except Exception as e:
                     logger.debug(f"Error finding scale target {target_kind}/{target_name}: {e}")
-            
+
             triggers = spec.get("triggers", [])
             for trigger in triggers:
                 metadata_trigger = trigger.get("metadata", {})
-                
+
                 if "configMapName" in metadata_trigger:
                     cm_name = metadata_trigger["configMapName"]
                     relationships.append(
@@ -76,7 +82,7 @@ class KEDAHandler(BaseCRDHandler):
                             details="KEDA trigger config",
                         )
                     )
-                
+
                 if "secretName" in metadata_trigger:
                     secret_name = metadata_trigger["secretName"]
                     relationships.append(
@@ -91,10 +97,9 @@ class KEDAHandler(BaseCRDHandler):
                             details="KEDA trigger credentials",
                         )
                     )
-        
+
         except Exception as e:
             logger.error(f"Error in KEDAHandler.discover(): {e}", exc_info=True)
             return []
-        
-        return relationships
 
+        return relationships

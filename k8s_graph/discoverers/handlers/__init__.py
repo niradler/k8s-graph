@@ -1,6 +1,6 @@
 from k8s_graph.discoverers.handlers.airflow import AirflowHandler
-from k8s_graph.discoverers.handlers.argocd import ArgoCDHandler
 from k8s_graph.discoverers.handlers.argo_workflows import ArgoWorkflowsHandler
+from k8s_graph.discoverers.handlers.argocd import ArgoCDHandler
 from k8s_graph.discoverers.handlers.base import BaseCRDHandler
 from k8s_graph.discoverers.handlers.cert_manager import CertManagerHandler
 from k8s_graph.discoverers.handlers.crossplane import CrossplaneHandler
@@ -55,4 +55,3 @@ __all__ = [
     "TemporalHandler",
     "get_all_handlers",
 ]
-

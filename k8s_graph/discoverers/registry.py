@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Optional
 
+from k8s_graph.crd_registry import CRDRegistry
 from k8s_graph.protocols import DiscovererProtocol
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,8 @@ class DiscovererRegistry:
             self._discoverers.append(discoverer)
 
             self._discoverers.sort(key=lambda d: d.priority, reverse=True)
+
+        CRDRegistry.get_global().register_handler(discoverer)
 
     def get_discoverers_for_resource(self, resource: dict[str, Any]) -> list[DiscovererProtocol]:
         """

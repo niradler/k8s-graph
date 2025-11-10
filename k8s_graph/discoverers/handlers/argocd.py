@@ -8,35 +8,61 @@ logger = logging.getLogger(__name__)
 
 
 class ArgoCDHandler(BaseCRDHandler):
+    def get_crd_kinds(self) -> list[str]:
+        return ["Application", "AppProject", "ApplicationSet"]
+
+    def get_crd_info(self, kind: str) -> dict[str, str] | None:
+        crd_map = {
+            "Application": {
+                "group": "argoproj.io",
+                "version": "v1alpha1",
+                "plural": "applications",
+            },
+            "AppProject": {"group": "argoproj.io", "version": "v1alpha1", "plural": "appprojects"},
+            "ApplicationSet": {
+                "group": "argoproj.io",
+                "version": "v1alpha1",
+                "plural": "applicationsets",
+            },
+        }
+        return crd_map.get(kind)
+
     def supports(self, resource: dict[str, Any]) -> bool:
-        return (
-            resource.get("kind") == "Application" and
-            resource.get("apiVersion", "").startswith("argoproj.io/")
-        )
+        kind = resource.get("kind")
+        api_version = resource.get("apiVersion", "")
+        return kind in self.get_crd_kinds() and api_version.startswith("argoproj.io/")
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships = []
-        
+
         try:
             metadata = resource.get("metadata", {})
             spec = resource.get("spec", {})
             source_id = self._extract_resource_identifier(resource)
-            
+
             app_name = metadata.get("name")
             argocd_namespace = metadata.get("namespace", "argocd")
             dest_namespace = spec.get("destination", {}).get("namespace")
-            
+
             if self.client and dest_namespace and app_name:
                 label_selector = {"argocd.argoproj.io/instance": app_name}
-                
-                for kind in ["Deployment", "StatefulSet", "DaemonSet", "Service", "ConfigMap", "Secret", "Ingress"]:
+
+                for kind in [
+                    "Deployment",
+                    "StatefulSet",
+                    "DaemonSet",
+                    "Service",
+                    "ConfigMap",
+                    "Secret",
+                    "Ingress",
+                ]:
                     try:
                         resources = await self._find_resources_by_label(
                             kind=kind,
                             namespace=dest_namespace,
                             label_selector=label_selector,
                         )
-                        
+
                         for res in resources:
                             res_metadata = res.get("metadata", {})
                             relationships.append(
@@ -53,7 +79,7 @@ class ArgoCDHandler(BaseCRDHandler):
                             )
                     except Exception as e:
                         logger.debug(f"Error finding ArgoCD-managed {kind} resources: {e}")
-            
+
             project = spec.get("project")
             if project and project != "default" and self.client:
                 try:
@@ -65,7 +91,7 @@ class ArgoCDHandler(BaseCRDHandler):
                             api_version="argoproj.io/v1alpha1",
                         )
                     )
-                    
+
                     if project_resource:
                         relationships.append(
                             ResourceRelationship(
@@ -81,7 +107,7 @@ class ArgoCDHandler(BaseCRDHandler):
                         )
                 except Exception as e:
                     logger.debug(f"Error finding AppProject: {e}")
-            
+
             source = spec.get("source", {})
             if isinstance(source, dict):
                 repo_url = source.get("repoURL", "")
@@ -91,11 +117,11 @@ class ArgoCDHandler(BaseCRDHandler):
                             kind="Secret",
                             namespace=argocd_namespace,
                         )
-                        
+
                         for secret in secrets:
                             secret_metadata = secret.get("metadata", {})
                             secret_labels = secret_metadata.get("labels", {})
-                            
+
                             if secret_labels.get("argocd.argoproj.io/secret-type") == "repository":
                                 relationships.append(
                                     ResourceRelationship(
@@ -112,10 +138,9 @@ class ArgoCDHandler(BaseCRDHandler):
                                 break
                     except Exception as e:
                         logger.debug(f"Error finding repository Secret: {e}")
-        
+
         except Exception as e:
             logger.error(f"Error in ArgoCDHandler.discover(): {e}", exc_info=True)
             return []
-        
-        return relationships
 
+        return relationships

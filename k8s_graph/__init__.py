@@ -25,6 +25,7 @@ Example:
 __version__ = "0.1.0"
 
 from k8s_graph.builder import GraphBuilder
+from k8s_graph.crd_registry import CRDRegistry
 from k8s_graph.discoverers.base import BaseDiscoverer
 from k8s_graph.discoverers.native import NativeResourceDiscoverer
 from k8s_graph.discoverers.network import NetworkPolicyDiscoverer
@@ -134,6 +135,7 @@ __all__ = [
     "DiscovererProtocol",
     "GraphBuilder",
     "NodeIdentity",
+    "CRDRegistry",
     "DiscovererRegistry",
     "UnifiedDiscoverer",
     "BaseDiscoverer",

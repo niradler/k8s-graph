@@ -8,31 +8,40 @@ logger = logging.getLogger(__name__)
 
 
 class TektonHandler(BaseCRDHandler):
+    def get_crd_kinds(self) -> list[str]:
+        return ["Pipeline", "PipelineRun", "Task", "TaskRun"]
+
+    def get_crd_info(self, kind: str) -> dict[str, str] | None:
+        crd_map = {
+            "Pipeline": {"group": "tekton.dev", "version": "v1beta1", "plural": "pipelines"},
+            "PipelineRun": {"group": "tekton.dev", "version": "v1beta1", "plural": "pipelineruns"},
+            "Task": {"group": "tekton.dev", "version": "v1beta1", "plural": "tasks"},
+            "TaskRun": {"group": "tekton.dev", "version": "v1beta1", "plural": "taskruns"},
+        }
+        return crd_map.get(kind)
+
     def supports(self, resource: dict[str, Any]) -> bool:
         kind = resource.get("kind")
         api_version = resource.get("apiVersion", "")
-        
-        return (
-            kind in ["Pipeline", "PipelineRun", "Task", "TaskRun"] and
-            "tekton.dev" in api_version
-        )
+
+        return kind in self.get_crd_kinds() and "tekton.dev" in api_version
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships = []
-        
+
         try:
             kind = resource.get("kind")
             metadata = resource.get("metadata", {})
             spec = resource.get("spec", {})
             source_id = self._extract_resource_identifier(resource)
-            
+
             namespace = metadata.get("namespace")
             name = metadata.get("name")
-            
+
             if kind == "PipelineRun":
                 pipeline_ref = spec.get("pipelineRef", {})
                 pipeline_name = pipeline_ref.get("name")
-                
+
                 if pipeline_name and self.client:
                     try:
                         pipeline = await self.client.get_resource(
@@ -42,7 +51,7 @@ class TektonHandler(BaseCRDHandler):
                                 namespace=namespace,
                             )
                         )
-                        
+
                         if pipeline:
                             relationships.append(
                                 ResourceRelationship(
@@ -58,7 +67,7 @@ class TektonHandler(BaseCRDHandler):
                             )
                     except Exception as e:
                         logger.debug(f"Error finding Pipeline {pipeline_name}: {e}")
-                
+
                 if self.client and namespace:
                     label_selector = {"tekton.dev/pipelineRun": name}
                     task_runs = await self._find_resources_by_label(
@@ -66,7 +75,7 @@ class TektonHandler(BaseCRDHandler):
                         namespace=namespace,
                         label_selector=label_selector,
                     )
-                    
+
                     for task_run in task_runs:
                         task_run_metadata = task_run.get("metadata", {})
                         relationships.append(
@@ -81,11 +90,11 @@ class TektonHandler(BaseCRDHandler):
                                 details="PipelineRun created TaskRun",
                             )
                         )
-            
+
             elif kind == "TaskRun":
                 task_ref = spec.get("taskRef", {})
                 task_name = task_ref.get("name")
-                
+
                 if task_name and self.client:
                     try:
                         task = await self.client.get_resource(
@@ -95,7 +104,7 @@ class TektonHandler(BaseCRDHandler):
                                 namespace=namespace,
                             )
                         )
-                        
+
                         if task:
                             relationships.append(
                                 ResourceRelationship(
@@ -111,7 +120,7 @@ class TektonHandler(BaseCRDHandler):
                             )
                     except Exception as e:
                         logger.debug(f"Error finding Task {task_name}: {e}")
-                
+
                 if self.client and namespace:
                     label_selector = {"tekton.dev/taskRun": name}
                     pods = await self._find_resources_by_label(
@@ -119,7 +128,7 @@ class TektonHandler(BaseCRDHandler):
                         namespace=namespace,
                         label_selector=label_selector,
                     )
-                    
+
                     for pod in pods:
                         pod_metadata = pod.get("metadata", {})
                         relationships.append(
@@ -134,12 +143,12 @@ class TektonHandler(BaseCRDHandler):
                                 details="TaskRun created Pod",
                             )
                         )
-                
+
                 workspaces = spec.get("workspaces", [])
                 for workspace in workspaces:
                     pvc = workspace.get("persistentVolumeClaim", {})
                     pvc_name = pvc.get("claimName")
-                    
+
                     if pvc_name:
                         relationships.append(
                             ResourceRelationship(
@@ -153,10 +162,9 @@ class TektonHandler(BaseCRDHandler):
                                 details="TaskRun uses workspace PVC",
                             )
                         )
-        
+
         except Exception as e:
             logger.error(f"Error in TektonHandler.discover(): {e}", exc_info=True)
             return []
-        
-        return relationships
 
+        return relationships

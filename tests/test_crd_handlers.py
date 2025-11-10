@@ -1,21 +1,22 @@
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
 from k8s_graph.discoverers.handlers import (
-    HelmHandler,
+    AirflowHandler,
     ArgoCDHandler,
     ArgoWorkflowsHandler,
-    AirflowHandler,
-    FluxCDHandler,
-    IstioHandler,
-    KnativeHandler,
     CertManagerHandler,
-    TektonHandler,
-    PrometheusHandler,
-    KEDAHandler,
-    VeleroHandler,
-    SparkHandler,
     CrossplaneHandler,
+    FluxCDHandler,
+    HelmHandler,
+    IstioHandler,
+    KEDAHandler,
+    KnativeHandler,
+    PrometheusHandler,
+    SparkHandler,
+    TektonHandler,
+    VeleroHandler,
 )
 from k8s_graph.models import RelationshipType
 
@@ -177,7 +178,9 @@ class TestArgoWorkflowsHandler:
 
         relationships = await handler.discover(workflow)
         assert len(relationships) > 0
-        assert any(r.relationship_type == RelationshipType.ARGO_WORKFLOW_SPAWNED for r in relationships)
+        assert any(
+            r.relationship_type == RelationshipType.ARGO_WORKFLOW_SPAWNED for r in relationships
+        )
 
 
 class TestAirflowHandler:
@@ -299,9 +302,7 @@ class TestIstioHandler:
             "kind": "VirtualService",
             "apiVersion": "networking.istio.io/v1beta1",
             "metadata": {"name": "vs1", "namespace": "default"},
-            "spec": {
-                "http": [{"route": [{"destination": {"host": "myservice"}}]}]
-            },
+            "spec": {"http": [{"route": [{"destination": {"host": "myservice"}}]}]},
         }
 
         mock_client.get_resource.return_value = {
@@ -390,7 +391,10 @@ class TestCertManagerHandler:
             "kind": "Certificate",
             "apiVersion": "cert-manager.io/v1",
             "metadata": {"name": "cert1", "namespace": "default"},
-            "spec": {"secretName": "cert1-secret", "issuerRef": {"kind": "Issuer", "name": "issuer1"}},
+            "spec": {
+                "secretName": "cert1-secret",
+                "issuerRef": {"kind": "Issuer", "name": "issuer1"},
+            },
         }
 
         mock_client.get_resource.return_value = {
@@ -510,7 +514,9 @@ class TestPrometheusHandler:
 
         relationships = await handler.discover(servicemonitor)
         assert len(relationships) > 0
-        assert any(r.relationship_type == RelationshipType.PROMETHEUS_MONITOR for r in relationships)
+        assert any(
+            r.relationship_type == RelationshipType.PROMETHEUS_MONITOR for r in relationships
+        )
 
 
 class TestKEDAHandler:
@@ -696,4 +702,3 @@ class TestCrossplaneHandler:
 
         relationships = await handler.discover(composition)
         assert isinstance(relationships, list)
-

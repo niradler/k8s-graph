@@ -8,27 +8,42 @@ logger = logging.getLogger(__name__)
 
 
 class KnativeHandler(BaseCRDHandler):
+    def get_crd_kinds(self) -> list[str]:
+        return ["Service", "Route", "Configuration", "Revision"]
+
+    def get_crd_info(self, kind: str) -> dict[str, str] | None:
+        crd_map = {
+            "Service": {"group": "serving.knative.dev", "version": "v1", "plural": "services"},
+            "Route": {"group": "serving.knative.dev", "version": "v1", "plural": "routes"},
+            "Configuration": {
+                "group": "serving.knative.dev",
+                "version": "v1",
+                "plural": "configurations",
+            },
+            "Revision": {"group": "serving.knative.dev", "version": "v1", "plural": "revisions"},
+        }
+        return crd_map.get(kind)
+
     def supports(self, resource: dict[str, Any]) -> bool:
         kind = resource.get("kind")
         api_version = resource.get("apiVersion", "")
-        
-        return (
-            kind in ["Service", "Route", "Configuration", "Revision"] and
-            ("knative.dev" in api_version or "serving.knative.dev" in api_version)
+
+        return kind in self.get_crd_kinds() and (
+            "knative.dev" in api_version or "serving.knative.dev" in api_version
         )
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships = []
-        
+
         try:
             kind = resource.get("kind")
             metadata = resource.get("metadata", {})
             spec = resource.get("spec", {})
             source_id = self._extract_resource_identifier(resource)
-            
+
             namespace = metadata.get("namespace")
             name = metadata.get("name")
-            
+
             owner_refs = metadata.get("ownerReferences", [])
             for owner_ref in owner_refs:
                 if owner_ref.get("kind") in ["Service", "Configuration"]:
@@ -44,18 +59,18 @@ class KnativeHandler(BaseCRDHandler):
                             details=f"{owner_ref.get('kind')} owns {kind}",
                         )
                     )
-            
+
             if kind == "Revision" and self.client and namespace:
                 label_selector = {
                     "serving.knative.dev/revision": name,
                 }
-                
+
                 deployments = await self._find_resources_by_label(
                     kind="Deployment",
                     namespace=namespace,
                     label_selector=label_selector,
                 )
-                
+
                 for deployment in deployments:
                     deployment_metadata = deployment.get("metadata", {})
                     relationships.append(
@@ -70,7 +85,7 @@ class KnativeHandler(BaseCRDHandler):
                             details="Knative Revision serves traffic via Deployment",
                         )
                     )
-            
+
             elif kind == "Route":
                 traffic = spec.get("traffic", [])
                 for traffic_target in traffic:
@@ -84,7 +99,7 @@ class KnativeHandler(BaseCRDHandler):
                                     namespace=namespace,
                                 )
                             )
-                            
+
                             if revision:
                                 relationships.append(
                                     ResourceRelationship(
@@ -100,10 +115,9 @@ class KnativeHandler(BaseCRDHandler):
                                 )
                         except Exception as e:
                             logger.debug(f"Error finding Revision {revision_name}: {e}")
-        
+
         except Exception as e:
             logger.error(f"Error in KnativeHandler.discover(): {e}", exc_info=True)
             return []
-        
-        return relationships
 
+        return relationships

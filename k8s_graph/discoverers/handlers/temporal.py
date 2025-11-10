@@ -27,7 +27,6 @@ class TemporalHandler(BaseCRDHandler):
 
     def supports(self, resource: dict[str, Any]) -> bool:
         labels = resource.get("metadata", {}).get("labels", {})
-        spec = resource.get("spec", {})
         kind = resource.get("kind")
 
         if kind == "Deployment":
@@ -85,9 +84,7 @@ class TemporalHandler(BaseCRDHandler):
 
         temporal_host = self._extract_temporal_host(resource)
         if temporal_host:
-            service_name, service_namespace = self._parse_temporal_host(
-                temporal_host, namespace
-            )
+            service_name, service_namespace = self._parse_temporal_host(temporal_host, namespace)
 
             temporal_frontend_id = ResourceIdentifier(
                 kind="Service",
@@ -127,12 +124,12 @@ class TemporalHandler(BaseCRDHandler):
                     kind="Job",
                     namespace=namespace,
                 )
-                
+
                 # Filter jobs created by this CronJob
                 for job in jobs:
                     job_metadata = job.get("metadata", {})
                     job_name = job_metadata.get("name", "")
-                    
+
                     # Jobs created by CronJobs have names like: {cronjob-name}-{timestamp}
                     if job_name.startswith(f"{cronjob_name}-"):
                         job_id = ResourceIdentifier(
@@ -146,7 +143,7 @@ class TemporalHandler(BaseCRDHandler):
                                 source=source_id,
                                 target=job_id,
                                 relationship_type=RelationshipType.TEMPORAL_SCHEDULE,
-                                details=f"CronJob schedules workflow execution via Job",
+                                details="CronJob schedules workflow execution via Job",
                             )
                         )
 
@@ -158,9 +155,7 @@ class TemporalHandler(BaseCRDHandler):
 
         temporal_host = self._extract_temporal_host(resource)
         if temporal_host:
-            service_name, service_namespace = self._parse_temporal_host(
-                temporal_host, namespace
-            )
+            service_name, service_namespace = self._parse_temporal_host(temporal_host, namespace)
 
             temporal_frontend_id = ResourceIdentifier(
                 kind="Service",
@@ -179,9 +174,7 @@ class TemporalHandler(BaseCRDHandler):
 
         return relationships
 
-    async def _discover_worker_pod(
-        self, resource: dict[str, Any]
-    ) -> list[ResourceRelationship]:
+    async def _discover_worker_pod(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         """
         Discover relationships for Temporal worker Pods.
 
@@ -194,9 +187,7 @@ class TemporalHandler(BaseCRDHandler):
 
         temporal_host = self._extract_temporal_host(resource)
         if temporal_host:
-            service_name, service_namespace = self._parse_temporal_host(
-                temporal_host, namespace
-            )
+            service_name, service_namespace = self._parse_temporal_host(temporal_host, namespace)
 
             temporal_frontend_id = ResourceIdentifier(
                 kind="Service",
@@ -291,4 +282,3 @@ class TemporalHandler(BaseCRDHandler):
     @property
     def priority(self) -> int:
         return 50
-

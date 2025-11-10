@@ -8,27 +8,43 @@ logger = logging.getLogger(__name__)
 
 
 class ArgoWorkflowsHandler(BaseCRDHandler):
+    def get_crd_kinds(self) -> list[str]:
+        return ["Workflow", "CronWorkflow", "WorkflowTemplate"]
+
+    def get_crd_info(self, kind: str) -> dict[str, str] | None:
+        crd_map = {
+            "Workflow": {"group": "argoproj.io", "version": "v1alpha1", "plural": "workflows"},
+            "CronWorkflow": {
+                "group": "argoproj.io",
+                "version": "v1alpha1",
+                "plural": "cronworkflows",
+            },
+            "WorkflowTemplate": {
+                "group": "argoproj.io",
+                "version": "v1alpha1",
+                "plural": "workflowtemplates",
+            },
+        }
+        return crd_map.get(kind)
+
     def supports(self, resource: dict[str, Any]) -> bool:
         kind = resource.get("kind")
         api_version = resource.get("apiVersion", "")
-        
-        return (
-            kind in ["Workflow", "CronWorkflow", "WorkflowTemplate"] and
-            api_version.startswith("argoproj.io/")
-        )
+
+        return kind in self.get_crd_kinds() and api_version.startswith("argoproj.io/")
 
     async def discover(self, resource: dict[str, Any]) -> list[ResourceRelationship]:
         relationships = []
-        
+
         try:
             kind = resource.get("kind")
             metadata = resource.get("metadata", {})
             spec = resource.get("spec", {})
             source_id = self._extract_resource_identifier(resource)
-            
+
             namespace = metadata.get("namespace")
             name = metadata.get("name")
-            
+
             if kind == "Workflow" and self.client and namespace and name:
                 label_selector = {"workflows.argoproj.io/workflow": name}
                 pods = await self._find_resources_by_label(
@@ -36,7 +52,7 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                     namespace=namespace,
                     label_selector=label_selector,
                 )
-                
+
                 for pod in pods:
                     pod_metadata = pod.get("metadata", {})
                     relationships.append(
@@ -51,7 +67,7 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                             details="Workflow spawned pod",
                         )
                     )
-            
+
             elif kind == "CronWorkflow" and self.client and namespace:
                 label_selector = {"workflows.argoproj.io/cron-workflow": name}
                 workflows = await self._find_resources_by_label(
@@ -59,7 +75,7 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                     namespace=namespace,
                     label_selector=label_selector,
                 )
-                
+
                 for workflow in workflows:
                     workflow_metadata = workflow.get("metadata", {})
                     relationships.append(
@@ -74,9 +90,9 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                             details="CronWorkflow created this Workflow",
                         )
                     )
-            
+
             workflow_spec = spec.get("workflowSpec", spec)
-            
+
             templates = workflow_spec.get("templates", [])
             for template in templates:
                 volumes = template.get("volumes", [])
@@ -96,7 +112,7 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                                     details="Volume mounted from ConfigMap",
                                 )
                             )
-                    
+
                     if "secret" in volume:
                         secret_name = volume["secret"].get("secretName")
                         if secret_name:
@@ -112,7 +128,7 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                                     details="Volume mounted from Secret",
                                 )
                             )
-            
+
             service_account = workflow_spec.get("serviceAccountName")
             if service_account:
                 relationships.append(
@@ -127,10 +143,9 @@ class ArgoWorkflowsHandler(BaseCRDHandler):
                         details="Workflow uses ServiceAccount",
                     )
                 )
-        
+
         except Exception as e:
             logger.error(f"Error in ArgoWorkflowsHandler.discover(): {e}", exc_info=True)
             return []
-        
-        return relationships
 
+        return relationships
